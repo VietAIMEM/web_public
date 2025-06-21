@@ -3,166 +3,252 @@
 <head>
   <title>Dự đoán cổ phiếu</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
   <style>
-    /* Reset một số style mặc định */
-    * {
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: Arial, sans-serif;
       background: #f4f7fa;
-      margin: 0;
       padding: 20px;
-      color: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-
-    h2 {
-      margin-bottom: 15px;
-      color: #222;
-      font-weight: 700;
-    }
-
-    #ticker-select {
-      padding: 10px 15px;
-      font-size: 16px;
-      border: 1.8px solid #4bc0c0;
-      border-radius: 8px;
-      background-color: #fff;
-      color: #333;
-      cursor: text;
-      transition: border-color 0.3s ease;
-      margin-bottom: 20px;
-      min-width: 220px;
-    }
-
-    #ticker-select:hover, #ticker-select:focus {
-      border-color: #36a2a2;
-      outline: none;
-    }
-
-    #result {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgb(0 0 0 / 0.1);
-      padding: 20px 25px;
-      width: 320px;
       text-align: center;
-      margin-bottom: 30px;
-      font-size: 17px;
-      color: #444;
     }
-
-    #result h3 {
-      margin-top: 0;
-      color: #4bc0c0;
-      font-weight: 700;
+    #ticker-select, #prediction-type {
+      padding: 10px;
+      font-size: 16px;
+      width: 250px;
+      margin-bottom: 20px;
+      margin-right: 10px;
     }
-
-    #result p {
-      margin: 8px 0;
-      line-height: 1.4;
-    }
-
-    #stockChart {
-      max-width: 900px;
-      width: 100%;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 6px 20px rgb(0 0 0 / 0.1);
+    #result {
+      margin: 20px auto;
       padding: 15px;
+      background: white;
+      border-radius: 10px;
+      width: 360px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-      #result {
-        width: 90%;
-      }
+    canvas {
+      margin-top: 20px;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 100%;
+      
+    }
+    .controls button {
+      margin: 10px 5px;
+      padding: 10px 20px;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      background-color: #0056b3;
+    }
+    .link {
+      display: inline-block;
+      margin: 10px 10px;
+      padding: 5px 15px;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .link:hover {
+      background-color: #0056b3;
     }
   </style>
-
 </head>
 <body>
-  <h2>Chọn mã cổ phiếu:</h2>
-  <input list="tickers-list" id="ticker-select" name="ticker-select" placeholder="Chọn hoặc nhập mã cổ phiếu" autocomplete="off" />
+  <h2>Dự đoán giá cổ phiếu bằng LSTM</h2>
+  <div>
+    <span>Bạn có thể qua dùng:</span>
+    <a href="" class="link">CNN</a>
+    <a href="https://l.facebook.com/l.php?u=https%3A%2F%2Fprojectml-9dkmx7nuhfnvxbdhscfxme.streamlit.app%2F%3Ffbclid%3DIwZXh0bgNhZW0CMTAAYnJpZBExakJEaFJVbDhSSkpETngxWgEebwe-eOAA8TYc2-f8-ox27BKOwiUOtwAOJJQuegDliNdQi9AmzZ678Qw0OvA_aem_BWLWNTlSHYeL8gEfmTwUIw&h=AT1l4SOnbPSd-IfPP6hCHmy1oYvoWfp1kQtxnxNPq3SWs4QAPsF0kUmYrbuMrprVSKKygC8W7mxPHHJgecElJKtcXLlHienpLOeOXT33V5ypJ-mqVCX9-8D9kEmsKHxx88vt-A" class="link">PatchTST</a>
+  </div>
+  <input list="tickers-list" id="ticker-select" name="ticker-select" placeholder="Nhập mã cổ phiếu" />
   <datalist id="tickers-list"></datalist>
-
+  <select id="prediction-type">
+    <option value="next_minute">Dự đoán phút tiếp theo</option>
+    <option value="two_minutes">Dự đoán 2 phút tiếp theo</option>
+    <option value="3_minutes">Dự đoán 3 phút tiếp theo</option>
+    <option value="4_minutes">Dự đoán 4 phút tiếp theo</option>
+  </select>
   <div id="result"></div>
-  <canvas id="stockChart" width="1000" height="300"></canvas>
+  <canvas id="stockChart"></canvas>
+
+  <!-- Nút điều khiển pan/zoom -->
+  <div class="controls">
+    <button onclick="panChart(-1)">← Qua trái</button>
+    <button onclick="panChart(1)">→ Qua phải</button>
+    <button onclick="resetZoom()">🔄 Reset Zoom</button>
+  </div>
 
   <script>
-    const apiUrl = "https://website-stock.onrender.com";
-
+    const apiUrl = "https://web-production-51b28.up.railway.app";
     let stockChart;
 
-    function createChart(labels, actualPrices, predictedPrice) {
+    function createChart(labels, actualPrices, predictedPrices, predictionType) {
       const ctx = document.getElementById('stockChart').getContext('2d');
-      if (stockChart) {
-        stockChart.destroy();
+      if (stockChart) stockChart.destroy();
+
+      let chartLabels = [...labels];
+      let datasets = [
+        {
+          label: 'Giá thực tế',
+          data: actualPrices,
+          borderColor: '#007bff',
+          backgroundColor: 'rgba(0, 123, 255, 0.1)',
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: true
+        }
+      ];
+
+      if (predictionType === 'next_minute') {
+        chartLabels.push(new Date(labels[labels.length - 1]).toISOString());
+        datasets.push({
+          label: 'Giá dự đoán phút 1',
+          data: Array(actualPrices.length - 1).fill(null).concat([predictedPrices[0]]),
+          borderColor: '#ff4d4f',
+          borderDash: [5, 5],
+          pointBackgroundColor: '#ff4d4f',
+          pointRadius: 5,
+          fill: false
+        });
+      } else if (predictionType === 'two_minutes') {
+        const lastTime = new Date(labels[labels.length - 1]);
+        chartLabels.push(new Date(lastTime.getTime() + 60 * 1000).toISOString());
+        chartLabels.push(new Date(lastTime.getTime() + 120 * 1000).toISOString());
+        datasets.push({
+          label: 'Giá dự đoán phút 1',
+          data: Array(actualPrices.length - 1).fill(null).concat([predictedPrices[0]]),
+          borderColor: '#ff4d4f',
+          borderDash: [5, 5],
+          pointBackgroundColor: '#ff4d4f',
+          pointRadius: 5,
+          fill: false
+        });
+        datasets.push({
+          label: 'Giá dự đoán phút 2',
+          data: Array(actualPrices.length).fill(null).concat([predictedPrices[1]]),
+          borderColor: '#00cc00',
+          borderDash: [5, 5],
+          pointBackgroundColor: '#00cc00',
+          pointRadius: 5,
+          fill: false
+        });
+      } else if (['3_minutes', '4_minutes'].includes(predictionType)) {
+        const minutes = predictionType === '3_minutes' ? 3 : 4;
+        const lastTime = new Date(labels[labels.length - 1]);
+        for (let i = 1; i <= minutes; i++) {
+          chartLabels.push(new Date(lastTime.getTime() + i * 60000).toISOString());
+        }
+        datasets.push({
+          label: `Giá dự đoán ${minutes} phút`,
+          data: Array(actualPrices.length - 1).fill(null).concat(predictedPrices),
+          borderColor: '#ff4d4f',
+          borderDash: [5, 5],
+          pointBackgroundColor: '#ff4d4f',
+          pointRadius: 5,
+          fill: false
+        });
       }
-      // Chuẩn bị dữ liệu cho giá thực tế (61 điểm)
-      const actualData = actualPrices;
-      // Chuẩn bị dữ liệu cho giá dự đoán (chỉ 1 điểm cuối)
-      const predictedData = Array(actualPrices.length - 1).fill(null).concat([predictedPrice]);
 
       stockChart = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'Giá thực tế',
-              data: actualData,
-              borderColor: 'rgb(75, 192, 192)',
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              fill: false,
-              pointRadius: 3
-            },
-            {
-              label: 'Giá dự đoán',
-              data: predictedData,
-              borderColor: 'rgb(255, 99, 132)',
-              backgroundColor: 'rgba(255, 99, 132, 0.2)',
-              fill: false,
-              pointRadius: 5,
-              borderDash: [5, 5]
-            }
-          ]
+          labels: chartLabels,
+          datasets: datasets
         },
         options: {
           responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Biểu đồ giá cổ phiếu',
+              font: { size: 18 }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            },
+            zoom: {
+              pan: {
+                enabled: true,
+                mode: 'x'
+              },
+              zoom: {
+                wheel: { enabled: true },
+                pinch: { enabled: true },
+                drag: { enabled: true, mode: 'x' },
+                mode: 'x'
+              }
+            }
+          },
+          interaction: {
+            mode: 'nearest',
+            axis: 'x',
+            intersect: false
+          },
           scales: {
             x: {
               title: {
                 display: true,
                 text: 'Thời gian'
+              },
+              ticks: {
+                maxRotation: 45,
+                minRotation: 20
               }
             },
             y: {
               title: {
                 display: true,
-                text: 'Giá (VND)'
+                text: 'Giá'
               }
-            }
-          },
-          plugins: {
-            legend: {
-              display: true
             }
           }
         }
       });
+
+      // ✅ Zoom mặc định vào 60 điểm cuối
+      const zoomToLastPoints = (numPoints = 60) => {
+        const xScale = stockChart.scales.x;
+        const total = xScale.getLabels().length;
+        if (total > numPoints) {
+          const minLabel = xScale.getLabels()[total - numPoints];
+          const maxLabel = xScale.getLabels()[total - 1];
+          xScale.options.min = minLabel;
+          xScale.options.max = maxLabel;
+          stockChart.update();
+        }
+      };
+
+      zoomToLastPoints(60);
     }
 
+    // ✅ Điều khiển Pan trái/phải
+    function panChart(direction) {
+      if (!stockChart) return;
+      const panAmount = 200; // Pan 200px
+      stockChart.pan({ x: -direction * panAmount }, undefined, 'default');
+    }
+
+    function resetZoom() {
+      if (!stockChart) return;
+      stockChart.resetZoom();
+    }
+
+    // ✅ Lấy danh sách ticker & dự đoán
     fetch(`${apiUrl}/tickers`)
       .then(res => res.json())
       .then(data => {
         const input = document.getElementById("ticker-select");
         const datalist = document.getElementById("tickers-list");
+        const predictionType = document.getElementById("prediction-type");
 
         data.tickers.forEach(t => {
           const option = document.createElement("option");
@@ -170,35 +256,46 @@
           datalist.appendChild(option);
         });
 
-        input.addEventListener("change", () => {
+        function fetchPrediction() {
           const value = input.value.trim();
+          const predType = predictionType.value;
           if (!value) return;
 
-          fetch(`${apiUrl}/predict/${value}`)
+          fetch(`${apiUrl}/predict/${value}?type=${predType}`)
             .then(res => res.json())
             .then(data => {
-              document.getElementById("result").innerHTML = `
+              let resultHtml = `
                 <h3>${data.ticker}</h3>
-                <p>Dự đoán phút tiếp theo: ${data.predicted_price}</p>
+                <p>Dự đoán: <b>${data.predicted_price}</b></p>
                 <p>Giá thực tế: ${data.actual_price}</p>
                 <p>Chênh lệch: ${data.error}</p>
               `;
+              if (data.second_predicted_price) {
+                resultHtml += `<p>Giá dự đoán phút 2: <b>${data.second_predicted_price}</b></p>`;
+              }
+              if (data.extended_predicted_prices) {
+                resultHtml += `<p>Giá dự đoán cuối: <b>${data.extended_predicted_prices.at(-1)}</b></p>`;
+              }
+
+              document.getElementById("result").innerHTML = resultHtml;
+
               fetch(`${apiUrl}/history/${value}`)
                 .then(res => res.json())
                 .then(historyData => {
-                  const labels = historyData.history.map(h => new Date(h.datetime).toLocaleTimeString());
+                  const labels = historyData.history.map(h => h.datetime);
                   const prices = historyData.history.map(h => h.close);
-                  createChart(labels, prices, data.predicted_price);
+                  const predictedPrices = data.extended_predicted_prices ? data.extended_predicted_prices : [data.predicted_price, data.second_predicted_price].filter(p => p !== undefined);
+                  createChart(labels, prices, predictedPrices, predType);
                 });
             })
             .catch(err => {
-              document.getElementById("result").innerHTML = `<p style="color:red;">Lỗi khi lấy dữ liệu dự đoán hoặc lịch sử.</p>`;
+              document.getElementById("result").innerHTML = `<p style="color:red;">Lỗi khi lấy dữ liệu.</p>`;
               if (stockChart) stockChart.destroy();
             });
-        });
-      })
-      .catch(err => {
-        document.getElementById("result").innerHTML = `<p style="color:red;">Lỗi khi tải danh sách mã cổ phiếu.</p>`;
+        }
+
+        input.addEventListener("change", fetchPrediction);
+        predictionType.addEventListener("change", fetchPrediction);
       });
   </script>
 </body>
