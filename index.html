@@ -63,8 +63,8 @@
   <h2>Dự đoán giá cổ phiếu bằng LSTM</h2>
   <div>
     <span>Bạn có thể qua dùng:</span>
-    <a href="" class="link">CNN</a>
-    <a href="https://l.facebook.com/l.php?u=https%3A%2F%2Fprojectml-9dkmx7nuhfnvxbdhscfxme.streamlit.app%2F%3Ffbclid%3DIwZXh0bgNhZW0CMTAAYnJpZBExakJEaFJVbDhSSkpETngxWgEebwe-eOAA8TYc2-f8-ox27BKOwiUOtwAOJJQuegDliNdQi9AmzZ678Qw0OvA_aem_BWLWNTlSHYeL8gEfmTwUIw&h=AT1l4SOnbPSd-IfPP6hCHmy1oYvoWfp1kQtxnxNPq3SWs4QAPsF0kUmYrbuMrprVSKKygC8W7mxPHHJgecElJKtcXLlHienpLOeOXT33V5ypJ-mqVCX9-8D9kEmsKHxx88vt-A" class="link">PatchTST</a>
+    <a href="https://web-production-e6058b.up.railway.app/" class="link">CNN</a>
+    <a href="https://timeseriesproject-duong.streamlit.app/" class="link">PatchTST</a>
   </div>
   <input list="tickers-list" id="ticker-select" name="ticker-select" placeholder="Nhập mã cổ phiếu" />
   <datalist id="tickers-list"></datalist>
@@ -84,7 +84,7 @@
   </div>
 
   <script>
-    const apiUrl = "http://127.0.0.1:8000";
+    const apiUrl = "https://web-production-51b28.up.railway.app";
     let stockChart;
     let currentHistoryData = [];
     let clickedPredictions = []; // Lưu trữ các điểm dự đoán từ các lần nhấp
