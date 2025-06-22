@@ -31,7 +31,6 @@
       background: white;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
       max-width: 100%;
-      
     }
     .controls button {
       margin: 10px 5px;
@@ -64,8 +63,8 @@
   <h2>Dự đoán giá cổ phiếu bằng LSTM</h2>
   <div>
     <span>Bạn có thể qua dùng:</span>
-    <a href="https://web-production-e6058b.up.railway.app/" class="link">CNN</a>
-    <a href="https://timeseriesproject-duong.streamlit.app/" class="link">PatchTST</a>
+    <a href="" class="link">CNN</a>
+    <a href="https://l.facebook.com/l.php?u=https%3A%2F%2Fprojectml-9dkmx7nuhfnvxbdhscfxme.streamlit.app%2F%3Ffbclid%3DIwZXh0bgNhZW0CMTAAYnJpZBExakJEaFJVbDhSSkpETngxWgEebwe-eOAA8TYc2-f8-ox27BKOwiUOtwAOJJQuegDliNdQi9AmzZ678Qw0OvA_aem_BWLWNTlSHYeL8gEfmTwUIw&h=AT1l4SOnbPSd-IfPP6hCHmy1oYvoWfp1kQtxnxNPq3SWs4QAPsF0kUmYrbuMrprVSKKygC8W7mxPHHJgecElJKtcXLlHienpLOeOXT33V5ypJ-mqVCX9-8D9kEmsKHxx88vt-A" class="link">PatchTST</a>
   </div>
   <input list="tickers-list" id="ticker-select" name="ticker-select" placeholder="Nhập mã cổ phiếu" />
   <datalist id="tickers-list"></datalist>
@@ -78,7 +77,6 @@
   <div id="result"></div>
   <canvas id="stockChart"></canvas>
 
-  <!-- Nút điều khiển pan/zoom -->
   <div class="controls">
     <button onclick="panChart(-1)">← Qua trái</button>
     <button onclick="panChart(1)">→ Qua phải</button>
@@ -86,8 +84,10 @@
   </div>
 
   <script>
-    const apiUrl = "https://web-production-51b28.up.railway.app";
+    const apiUrl = "http://127.0.0.1:8000";
     let stockChart;
+    let currentHistoryData = [];
+    let clickedPredictions = []; // Lưu trữ các điểm dự đoán từ các lần nhấp
 
     function createChart(labels, actualPrices, predictedPrices, predictionType) {
       const ctx = document.getElementById('stockChart').getContext('2d');
@@ -107,6 +107,29 @@
         }
       ];
 
+      // Thêm dataset cho các điểm dự đoán từ các lần nhấp
+      if (clickedPredictions.length > 0) {
+        let clickedData = Array(chartLabels.length).fill(null);
+        clickedPredictions.forEach(pred => {
+          const predTime = pred.time;
+          const index = chartLabels.indexOf(predTime);
+          if (index !== -1) {
+            clickedData[index] = pred.price;
+          }
+        });
+        datasets.push({
+          label: 'Điểm dự đoán từ nhấp chuột',
+          data: clickedData,
+          borderColor: '#ff9900',
+          backgroundColor: '#ff9900',
+          pointRadius: 6,
+          pointHoverRadius: 8,
+          showLine: false, // Không nối các điểm
+          fill: false
+        });
+      }
+
+      // Thêm các điểm dự đoán mặc định (cho điểm cuối)
       if (predictionType === 'next_minute') {
         chartLabels.push(new Date(labels[labels.length - 1]).toISOString());
         datasets.push({
@@ -168,7 +191,7 @@
           plugins: {
             title: {
               display: true,
-              text: 'Biểu đồ giá cổ phiếu',
+              text: 'Biểu đồ giá cổ phiếu (Bạn có thể nhấp vào các điểm trên biểu đồ để dự đoán thời gian đó)',
               font: { size: 18 }
             },
             tooltip: {
@@ -210,11 +233,32 @@
                 text: 'Giá'
               }
             }
+          },
+          onClick: (event, elements) => {
+            if (elements.length > 0) {
+              const index = elements[0].index;
+              const datasetIndex = elements[0].datasetIndex;
+              if (datasetIndex === 0 && index < labels.length) {
+                const selectedTime = labels[index];
+                const windowSize = predictionType === 'next_minute' ? 61 :
+                                  predictionType === 'two_minutes' ? 62 :
+                                  predictionType === '3_minutes' ? 63 : 64;
+                const historySlice = currentHistoryData.slice(0, index + 1).slice(-windowSize);
+                if (historySlice.length >= windowSize) {
+                  const historyForPrediction = {
+                    datetime: historySlice.map(h => h.datetime),
+                    close: historySlice.map(h => h.close)
+                  };
+                  fetchPredictionForPoint(historyForPrediction, document.getElementById('ticker-select').value, predictionType, index, selectedTime);
+                } else {
+                  document.getElementById('result').innerHTML = `<p style="color:red;">Không đủ dữ liệu để dự đoán tại điểm này.</p>`;
+                }
+              }
+            }
           }
         }
       });
 
-      // ✅ Zoom mặc định vào 60 điểm cuối
       const zoomToLastPoints = (numPoints = 60) => {
         const xScale = stockChart.scales.x;
         const total = xScale.getLabels().length;
@@ -230,10 +274,75 @@
       zoomToLastPoints(60);
     }
 
-    // ✅ Điều khiển Pan trái/phải
+    function fetchPredictionForPoint(historyData, ticker, predictionType, clickedIndex, selectedTime) {
+      fetch(`${apiUrl}/predict_custom/${ticker}?type=${predictionType}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          datetime: historyData.datetime,
+          close: historyData.close
+        })
+      })
+        .then(res => res.json())
+        .then(data => {
+          let resultHtml = `
+            <h3>${data.ticker} (tại ${new Date(historyData.datetime[historyData.datetime.length - 1]).toLocaleString()})</h3>
+            <p>Dự đoán: <b>${data.predicted_price}</b></p>
+            <p>Giá thực tế: ${data.actual_price}</p>
+            <p>Chênh lệch: ${data.error}</p>
+          `;
+          if (data.second_predicted_price) {
+            resultHtml += `<p>Giá dự đoán phút 2: <b>${data.second_predicted_price}</b></p>`;
+          }
+          if (data.extended_predicted_prices) {
+            resultHtml += `<p>Giá dự đoán cuối: <b>${data.extended_predicted_prices.at(-1)}</b></p>`;
+          }
+          document.getElementById("result").innerHTML = resultHtml;
+
+          // Thêm điểm dự đoán vào clickedPredictions tại thời gian của điểm được nhấp
+          clickedPredictions = clickedPredictions.filter(pred => pred.time !== selectedTime); // Xóa dự đoán cũ tại cùng thời gian
+          if (predictionType === 'next_minute') {
+            clickedPredictions.push({
+              time: selectedTime,
+              price: data.predicted_price
+            });
+          } else if (predictionType === 'two_minutes') {
+            clickedPredictions.push({
+              time: selectedTime,
+              price: data.predicted_price
+            });
+            const nextTime = new Date(new Date(selectedTime).getTime() + 60 * 1000).toISOString();
+            clickedPredictions.push({
+              time: nextTime,
+              price: data.second_predicted_price
+            });
+          } else if (['3_minutes', '4_minutes'].includes(predictionType)) {
+            const minutes = predictionType === '3_minutes' ? 3 : 4;
+            data.extended_predicted_prices.forEach((price, i) => {
+              const predTime = new Date(new Date(selectedTime).getTime() + i * 60 * 1000).toISOString();
+              clickedPredictions.push({
+                time: predTime,
+                price: price
+              });
+            });
+          }
+
+          // Cập nhật biểu đồ mà không ảnh hưởng đến điểm dự đoán cuối
+          const labels = currentHistoryData.map(h => h.datetime);
+          const prices = currentHistoryData.map(h => h.close);
+          const predictedPrices = data.extended_predicted_prices ? data.extended_predicted_prices : [data.predicted_price, data.second_predicted_price].filter(p => p !== undefined);
+          createChart(labels, prices, predictedPrices, predictionType);
+        })
+        .catch(err => {
+          document.getElementById("result").innerHTML = `<p style="color:red;">Lỗi khi dự đoán điểm: ${err.message}</p>`;
+        });
+    }
+
     function panChart(direction) {
       if (!stockChart) return;
-      const panAmount = 200; // Pan 200px
+      const panAmount = 200;
       stockChart.pan({ x: -direction * panAmount }, undefined, 'default');
     }
 
@@ -242,7 +351,6 @@
       stockChart.resetZoom();
     }
 
-    // ✅ Lấy danh sách ticker & dự đoán
     fetch(`${apiUrl}/tickers`)
       .then(res => res.json())
       .then(data => {
@@ -260,6 +368,9 @@
           const value = input.value.trim();
           const predType = predictionType.value;
           if (!value) return;
+
+          // Reset clickedPredictions khi chọn ticker mới
+          clickedPredictions = [];
 
           fetch(`${apiUrl}/predict/${value}?type=${predType}`)
             .then(res => res.json())
@@ -282,6 +393,7 @@
               fetch(`${apiUrl}/history/${value}`)
                 .then(res => res.json())
                 .then(historyData => {
+                  currentHistoryData = historyData.history;
                   const labels = historyData.history.map(h => h.datetime);
                   const prices = historyData.history.map(h => h.close);
                   const predictedPrices = data.extended_predicted_prices ? data.extended_predicted_prices : [data.predicted_price, data.second_predicted_price].filter(p => p !== undefined);
